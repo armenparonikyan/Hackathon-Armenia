@@ -11,6 +11,7 @@ contract BinaryFuture{
         address short;
         address winner;
         FuturesStage stage;
+        uint256 finalValue;
     }
 
     enum FuturesStage{
@@ -45,32 +46,52 @@ contract BinaryFuture{
 
     //take "long" or "short" position with msg.value == future.buyIn
     function fillPosition(uint256 position) public payable {
+        if (Positions(position) == Positions.Short) {
+            future.short = msg.sender;
+        } else if (Positions(position) == Positions.Long) {
+            future.long = msg.sender;
+        }
 
+        if (future.long != 0 && future.short != 0) {
+            future.stage = FuturesStage.ReadyStart;
+        }
     }
 
     //make query for future.startValue
     function startContract() public {
-
+        queryOracle();
     }
 
     //make query for future.endValue
     function endContract() public {
-
+        queryOracle();
     }
 
     //compare future.startValue with future.endValue, payout to and short proportionally
     function settleContract() public {
-
+        if (future.stage == FuturesStage.ReadySettle) {
+            future.finalValue =  future.endValue - future.startValue;
+        } else {
+            throw;
+        }
     }
 
     //emit query event
-    function queryOracle(string stage, string query) internal {
-        Query("armen", msg.sender);
+    function queryOracle() internal {
+        Query(future.query, future.queryAddress);
     }
 
     //handle oracle response
     function oracleCallback(uint256 response){
-
+        if (future.stage == FuturesStage.ReadyStart) {
+            future.startValue = response;
+            future.stage = FuturesStage.ContractLive;
+        } else if (future.stage == FuturesStage.ContractLive) {
+            future.endValue = response;
+            future.stage = FuturesStage.ReadySettle;
+        } else {
+            throw;
+        }
     }
 
     //are positions unfilled =>Unfilled (0)
@@ -79,7 +100,7 @@ contract BinaryFuture{
     //is contract ready to end (make query for future.endValue) =>ReadyEnd (3)
     //is contract ready to settle payouts via future.startValue and future.endValue =>ReadySettled (4)
     function getStatus() constant returns(FuturesStage stage){
-
+        return future.stage;
     }
 
     function getBuyIn() constant returns(uint256 buyIn){
@@ -96,6 +117,10 @@ contract BinaryFuture{
 
     function getShort() constant returns(address short){
         return future.short;
+    }
+
+    function getExpires () returns(uint256 expires) {
+        return future.expires;
     }
 
 }
